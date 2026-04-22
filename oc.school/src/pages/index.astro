@@ -131,6 +131,7 @@ const PAGE_DESCRIPTION =
 			const LIMA_TIME_ZONE = 'America/Lima';
 			const LIMA_OFFSET = '-05:00';
 			const MAX_NOTIFICATION_DELAY = 2_147_483_647;
+			const NOTIFICATION_CATCHUP_WINDOW_MS = 2 * 60 * 1000;
 			const APP_ICON_URL = document.body.dataset.appIconUrl ?? '/favicon.svg';
 
 			const todoForm = document.querySelector<HTMLFormElement>('[data-todo-form]');
@@ -406,6 +407,16 @@ const PAGE_DESCRIPTION =
 					}
 
 					const triggerAt = new Date(event.startsAt).getTime();
+					const overdueBy = now - triggerAt;
+					if (overdueBy >= 0 && overdueBy <= NOTIFICATION_CATCHUP_WINDOW_MS) {
+						new Notification('Recordatorio de agenda', {
+							body: `${event.title} - ${formatEventDateTime(event.startsAt)} (Lima)`,
+							icon: APP_ICON_URL,
+						});
+						onTriggered(event.id);
+						continue;
+					}
+
 					const delay = triggerAt - now;
 					if (delay <= 0 || delay > MAX_NOTIFICATION_DELAY) {
 						continue;
@@ -661,6 +672,20 @@ const PAGE_DESCRIPTION =
 				updateNotificationUi();
 				setDefaultEventDateTime();
 				persistAndRenderEvents(events);
+
+				const rescheduleNotifications = (): void => {
+					scheduleEventNotifications(events, markEventNotified);
+				};
+
+				window.addEventListener('focus', () => {
+					rescheduleNotifications();
+				});
+
+				document.addEventListener('visibilitychange', () => {
+					if (document.visibilityState === 'visible') {
+						rescheduleNotifications();
+					}
+				});
 
 				eventForm.addEventListener('submit', (event) => {
 					event.preventDefault();
